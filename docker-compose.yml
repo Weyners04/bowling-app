@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    container_name: bowling-backend
+    restart: always
+    volumes:
+      # Lie le dossier local au dossier du conteneur pour garder les données
+      - ./backend/data:/app/data
+      - ./frontend:/app/frontend
+    ports:
+      - "3001:3001"
+
+  frontend:
+    build: ./frontend
+    container_name: bowling-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
