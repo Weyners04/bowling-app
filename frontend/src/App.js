@@ -61,11 +61,14 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newScore),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Erreur ${res.status}`);
+      }
       await fetchData();
       showToast("Score enregistré", 'success');
-    } catch {
-      showToast("Impossible d'enregistrer le score");
+    } catch (err) {
+      showToast(err.message || "Impossible d'enregistrer le score");
     }
   };
 

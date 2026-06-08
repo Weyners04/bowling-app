@@ -52,6 +52,8 @@ app.post("/api/scores", (req, res) => {
       return res.status(400).json({ error: "Le score doit être entre 0 et 300" });
     if (!date || isNaN(Date.parse(date)))
       return res.status(400).json({ error: "Date invalide" });
+    if (new Date(date) > new Date(Date.now() + 2 * 60 * 60 * 1000))
+      return res.status(400).json({ error: "La date ne peut pas être dans le futur" });
 
     const player = db.prepare("SELECT id FROM players WHERE id = ?").get(playerId);
     if (!player)

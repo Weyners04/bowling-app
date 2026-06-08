@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { TrendingUp, Clock, Trash2 } from 'lucide-react';
 import { tailwindColorMap } from '../constants';
 
@@ -6,11 +6,26 @@ const GRAPH_W = 600;
 const GRAPH_H = 250;
 const PAD_X = 50;
 const PAD_Y = 50;
+const MIN_LABEL_SPACING = 45;
+
+const PERIODS = [
+  { val: 'global',    label: 'Global' },
+  { val: 'trimestre', label: '3 mois' },
+];
 
 export default function Dashboard({ players, scores, onSelectPlayer, onDeleteScore }) {
+  const [period, setPeriod] = useState('global');
+
+  const filteredScores = useMemo(() => {
+    if (period === 'global') return scores;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    return scores.filter(s => new Date(s.date) >= cutoff);
+  }, [scores, period]);
+
   const stats = useMemo(() => {
     return players.map(p => {
-      const pScores = scores.filter(s => s.playerId === p.id);
+      const pScores = filteredScores.filter(s => s.playerId === p.id);
       const scoresByDay = pScores.reduce((acc, s) => {
         const day = new Date(s.date).toLocaleDateString();
         if (!acc[day]) acc[day] = { sum: 0, count: 0, timestamp: new Date(s.date).getTime() };
@@ -30,7 +45,7 @@ export default function Dashboard({ players, scores, onSelectPlayer, onDeleteSco
 
       return { ...p, total, avg, history: dailyHistory, rawCount: pScores.length };
     }).sort((a, b) => b.avg - a.avg);
-  }, [players, scores]);
+  }, [players, filteredScores]);
 
   const allHistoryPoints = stats.flatMap(p => p.history);
   const minDate = allHistoryPoints.length ? Math.min(...allHistoryPoints.map(h => h.date)) : Date.now() - 86400000;
@@ -43,21 +58,46 @@ export default function Dashboard({ players, scores, onSelectPlayer, onDeleteSco
     return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
   });
 
+  // Ne garde que les labels suffisamment espacés pour éviter les chevauchements
+  const visibleDateLabels = uniqueDates.reduce((acc, dateStr) => {
+    const [d, m, y] = dateStr.split('/');
+    const timestamp = new Date(y, m - 1, d).getTime();
+    const x = PAD_X + ((timestamp - minDate) / dateRange) * (GRAPH_W - 2 * PAD_X);
+    if (acc.length === 0 || x - acc[acc.length - 1].x >= MIN_LABEL_SPACING) {
+      acc.push({ dateStr, x });
+    }
+    return acc;
+  }, []);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl overflow-hidden">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-4">
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <TrendingUp size={16} className="text-cyan-500" /> Évolution
           </h2>
-          <div className="flex flex-wrap gap-2">
-            {stats.map(p => (
-              <div key={p.id} className="flex items-center gap-1 bg-slate-900/50 px-2 py-0.5 rounded text-[9px] text-slate-400 border border-slate-700/50">
-                <div className={`w-1.5 h-1.5 rounded-full ${tailwindColorMap[p.color]}`}></div>
-                {p.name}
-              </div>
+          <div className="flex gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-700/50">
+            {PERIODS.map(opt => (
+              <button
+                key={opt.val}
+                onClick={() => setPeriod(opt.val)}
+                className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  period === opt.val ? 'bg-cyan-500 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
             ))}
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          {stats.map(p => (
+            <div key={p.id} className="flex items-center gap-1 bg-slate-900/50 px-2 py-0.5 rounded text-[9px] text-slate-400 border border-slate-700/50">
+              <div className={`w-1.5 h-1.5 rounded-full ${tailwindColorMap[p.color]}`}></div>
+              {p.name}
+            </div>
+          ))}
         </div>
 
         <svg viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`} className="w-full h-auto overflow-visible">
@@ -71,16 +111,11 @@ export default function Dashboard({ players, scores, onSelectPlayer, onDeleteSco
               </g>
             );
           })}
-          {uniqueDates.map(dateStr => {
-            const [d, m, y] = dateStr.split('/');
-            const timestamp = new Date(y, m - 1, d).getTime();
-            const x = PAD_X + ((timestamp - minDate) / dateRange) * (GRAPH_W - 2 * PAD_X);
-            return (
-              <text key={dateStr} x={x} y={GRAPH_H - PAD_Y + 20} textAnchor="middle" className="text-[9px] fill-slate-500">
-                {dateStr.split('/').slice(0, 2).join('/')}
-              </text>
-            );
-          })}
+          {visibleDateLabels.map(({ dateStr, x }) => (
+            <text key={dateStr} x={x} y={GRAPH_H - PAD_Y + 20} textAnchor="middle" className="text-[9px] fill-slate-500">
+              {dateStr.split('/').slice(0, 2).join('/')}
+            </text>
+          ))}
           {stats.map(p => {
             if (p.history.length < 1) return null;
             const pts = p.history.map(s => ({
@@ -126,7 +161,7 @@ export default function Dashboard({ players, scores, onSelectPlayer, onDeleteSco
               <span className="text-2xl bg-slate-900 p-2 rounded-lg">{p.emoji}</span>
               <div>
                 <h3 className="font-bold">{p.name}</h3>
-                <p className="text-[10px] text-slate-500 uppercase">{p.rawCount} parties</p>
+                <p className="text-[10px] text-slate-500 uppercase">{p.rawCount} partie{p.rawCount > 1 ? 's' : ''}</p>
               </div>
             </div>
             <div className="text-right">
@@ -139,10 +174,10 @@ export default function Dashboard({ players, scores, onSelectPlayer, onDeleteSco
 
       <div className="mt-12">
         <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Clock size={14} /> Historique Global
+          <Clock size={14} /> {period === 'global' ? 'Historique Global' : 'Historique — 3 derniers mois'}
         </h2>
         <div className="space-y-2">
-          {scores.slice(0, 10).map(s => {
+          {filteredScores.slice(0, 10).map(s => {
             const player = players.find(p => p.id === s.playerId);
             return (
               <div key={s.id} className="bg-slate-800/40 p-3 rounded-xl border border-slate-800 flex justify-between items-center group">
