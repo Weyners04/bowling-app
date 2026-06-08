@@ -3,13 +3,15 @@ const path = require('path');
 const fs = require('fs');
 
 const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)){
-    fs.mkdirSync(dataDir, { recursive: true });
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
 const db = new Database(path.join(dataDir, 'database.db'));
 
-// Initialisation avec le nouveau champ emoji
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS players (
     id TEXT PRIMARY KEY,
@@ -22,8 +24,11 @@ db.exec(`
     id TEXT PRIMARY KEY,
     playerId TEXT NOT NULL,
     score INTEGER NOT NULL,
-    date TEXT NOT NULL
+    date TEXT NOT NULL,
+    FOREIGN KEY (playerId) REFERENCES players(id) ON DELETE CASCADE
   );
+
+  CREATE INDEX IF NOT EXISTS idx_scores_player ON scores(playerId);
 `);
 
 module.exports = db;
